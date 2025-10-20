@@ -42,11 +42,10 @@ const Tab3: React.FC = () => {
       }
 
       const response = await fetch('http://127.0.0.1:5000/api/user/profile', {
-        headers: {
-          // --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
-          // Usamos ` (backticks), no ' (comillas simples)
-          'Authorization': `Bearer ${token}`
-        }
+headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` // ¡Con backticks!
+      },
       });
 
       if (!response.ok) {
