@@ -28,13 +28,12 @@ const Login: React.FC = () => {
   const handleLogin = async () => {
     setError(null);
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
+const apiUrl = import.meta.env.VITE_API_URL; // Opcional: guardar en variable
+const response = await fetch(`${apiUrl}/api/login`, { // <-- Cambio aquí
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ username, password }),
+});
 
       const data = await response.json();
       if (!response.ok) {

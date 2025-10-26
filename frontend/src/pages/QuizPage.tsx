@@ -19,6 +19,7 @@ interface QuizParams {
 
 type EstadoJuego = 'cargando' | 'mostrando' | 'respondido' | 'finalizado' | 'juego_terminado';
 
+// Función shuffle (sin cambios)
 function shuffleArray<T>(array: T[]): T[] {
     let currentIndex = array.length, randomIndex;
     while (currentIndex !== 0) {
@@ -34,10 +35,13 @@ const QuizPage: React.FC = () => {
   const { tema, duracion } = useParams<QuizParams>();
   const history = useHistory();
 
-  // Estados
+  // Define la URL base de la API
+  const apiUrl = import.meta.env.VITE_API_URL;
+
+  // Estados (sin cambios)
   const [mazo, setMazo] = useState<Pregunta[]>([]);
   const [indicePregunta, setIndicePregunta] = useState(0);
-  const [puntaje, setPuntaje] = useState(0); // Asegúrate de tener puntaje y setPuntaje
+  const [puntaje, setPuntaje] = useState(0);
   const [estadoJuego, setEstadoJuego] = useState<EstadoJuego>('cargando');
   const [seleccion, setSeleccion] = useState<string | null>(null);
   const [esCorrecto, setEsCorrecto] = useState<boolean | null>(null);
@@ -54,40 +58,67 @@ const QuizPage: React.FC = () => {
 
   useEffect(() => {
     const fetchPreguntasPorTema = async () => {
-      // ... (lógica fetch sin cambios) ...
+      if (!apiUrl) { // Verifica si apiUrl está definido
+         console.error("API URL no está configurada.");
+         history.replace('/tabs/tab1'); // Vuelve al menú si no hay URL
+         return;
+      }
       setEstadoJuego('cargando');
+      // Resetear estados...
       setMazo([]); setIndicePregunta(0); setPuntaje(0); setSeleccion(null);
       setEsCorrecto(null); setExplicacion(null); setVidas(5); setXp(0);
       setOpcionesFallidas([]); setRacha(0); setBonus(false); setRachaMaxima(0);
+
       try {
         const temaDecodificado = decodeURIComponent(tema);
-        const response = await fetch(`http://127.0.0.1:5000/api/preguntas/${temaDecodificado}`);
-        if (!response.ok) throw new Error(`No se encontraron preguntas para '${temaDecodificado}'`);
+        // --- CAMBIO AQUÍ ---
+        const response = await fetch(`${apiUrl}/api/preguntas/${temaDecodificado}`);
+        // --- FIN CAMBIO ---
+        if (!response.ok) {
+          throw new Error(`No se encontraron preguntas para '${temaDecodificado}'`);
+        }
         const data = await response.json();
         const todasLasPreguntas: Pregunta[] = data.preguntas || [];
+
         if (todasLasPreguntas.length > 0) {
           const preguntasMezcladas = shuffleArray(todasLasPreguntas);
           const mazoLimitado = preguntasMezcladas.slice(0, numPreguntas);
           setMazo(mazoLimitado);
           setEstadoJuego('mostrando');
-        } else { history.goBack(); }
-      } catch (error) { console.error("Error al cargar preguntas:", error); history.replace('/tabs/tab1'); }
+        } else {
+            console.warn(`No hay preguntas en BD para: ${temaDecodificado}`);
+            history.goBack();
+        }
+      } catch (error) {
+        console.error("Error al cargar preguntas:", error);
+        history.replace('/tabs/tab1');
+      }
     };
+
     fetchPreguntasPorTema();
-  }, [tema, duracion, history]);
+  }, [tema, duracion, history, apiUrl]); // Añadido apiUrl a dependencias
 
   const guardarProgreso = async (xpGanado: number) => {
-    if (xpGanado <= 0) return;
+    if (xpGanado <= 0 || !apiUrl) return; // Verifica apiUrl
     try {
       const token = localStorage.getItem('access_token');
       if (!token) return;
-      await fetch('http://127.0.0.1:5000/api/user/update_xp', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      // --- CAMBIO AQUÍ ---
+      await fetch(`${apiUrl}/api/user/update_xp`, {
+      // --- FIN CAMBIO ---
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ xp_ganado: xpGanado })
       });
-    } catch (error) { console.error("Error al guardar el progreso:", error); }
+    } catch (error) {
+      console.error("Error al guardar el progreso:", error);
+    }
   };
 
+  // --- handleRespuesta (sin cambios internos, pero usa guardarProgreso actualizado) ---
   const handleRespuesta = (opcionSeleccionada: string) => {
      if (!preguntaActual || opcionesFallidas.includes(opcionSeleccionada) || estadoJuego === 'respondido') return;
      const correcta = preguntaActual.respuesta_correcta;
@@ -96,7 +127,7 @@ const QuizPage: React.FC = () => {
          if (nuevaRacha > rachaMaxima) setRachaMaxima(nuevaRacha);
          let xpGanado = 10;
          if (nuevaRacha % 5 === 0 && nuevaRacha > 0) { xpGanado += 50; setBonus(true); } else { setBonus(false); }
-         setXp(xp + xpGanado); setPuntaje(puntaje + 1); setEsCorrecto(true); // Suma puntaje aquí
+         setXp(xp + xpGanado); setPuntaje(puntaje + 1); setEsCorrecto(true);
          setSeleccion(opcionSeleccionada); setExplicacion(preguntaActual.explicacion);
          setEstadoJuego('respondido');
      } else {
@@ -107,6 +138,7 @@ const QuizPage: React.FC = () => {
      }
   };
 
+  // --- handleSiguiente (sin cambios internos, pero usa guardarProgreso actualizado) ---
   const handleSiguiente = () => {
      const proximoIndice = indicePregunta + 1;
      if (proximoIndice < mazo.length) {
@@ -120,6 +152,7 @@ const QuizPage: React.FC = () => {
 
   const volverAlMenuEjes = () => { history.goBack(); };
 
+  // --- getBotonColor (sin cambios) ---
   const getBotonColor = (opcion: string): ('success' | 'danger' | 'medium' | undefined) => {
     if (estadoJuego === 'respondido') {
       if (opcion === preguntaActual?.respuesta_correcta) return 'success';
@@ -129,9 +162,10 @@ const QuizPage: React.FC = () => {
       if (opcionesFallidas.includes(opcion)) return 'danger';
       return 'medium';
     }
-    return 'medium'; // Default return
+    return 'medium';
   };
 
+  // --- Renderizado (sin cambios estructurales) ---
   return (
     <IonPage>
       <IonHeader>
@@ -140,60 +174,43 @@ const QuizPage: React.FC = () => {
         </IonToolbar>
       </IonHeader>
       <IonContent fullscreen className="ion-padding">
-
         <IonLoading isOpen={estadoJuego === 'cargando'} message={'Cargando preguntas...'} />
-
         {preguntaActual && (estadoJuego === 'mostrando' || estadoJuego === 'respondido') && (
           <>
-            {/* Barra de Vidas/Racha/XP */}
+            {/* Barra superior */}
             <div className="ion-text-center ion-margin-bottom">
               <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 10px' }}>
                 <IonText color="danger"><h2 style={{ margin: 0 }}>❤️ {vidas}</h2></IonText>
                 <IonText color="warning"><h2 style={{ margin: 0 }}>🔥 {racha}</h2></IonText>
                 <IonText color="success"><h2 style={{ margin: 0 }}>{xp} XP</h2></IonText>
               </div>
-              <IonText color="medium" style={{ marginTop: '8px' }}>
-                <p>Pregunta {indicePregunta + 1} de {mazo.length}</p>
-              </IonText>
+              <IonText color="medium" style={{ marginTop: '8px' }}><p>Pregunta {indicePregunta + 1} de {mazo.length}</p></IonText>
             </div>
-            {/* Tarjeta de Pregunta */}
+             {/* Tarjeta y Opciones */}
             <IonCard>
               <IonCardHeader><IonCardTitle>{preguntaActual.tema}</IonCardTitle></IonCardHeader>
               <IonCardContent>{preguntaActual.pregunta}</IonCardContent>
             </IonCard>
-            {/* Lista de Opciones */}
             <IonList>
               {preguntaActual.opciones.map((opcion) => (
-                <IonItem
-                  key={opcion}
-                  button
-                  onClick={() => handleRespuesta(opcion)}
+                <IonItem key={opcion} button onClick={() => handleRespuesta(opcion)}
                   disabled={estadoJuego === 'respondido' || opcionesFallidas.includes(opcion)}
-                  color={getBotonColor(opcion)}
-                >
+                  color={getBotonColor(opcion)}>
                   <IonLabel>{opcion}</IonLabel>
                 </IonItem>
               ))}
             </IonList>
           </>
         )}
-
-        {/* --- ESTADO RESPONDIDO (DESCOMENTADO) --- */}
+        {/* Estados finales */}
         {estadoJuego === 'respondido' && (
           <div className="ion-text-center ion-margin-top">
             <h2 style={{ color: 'var(--ion-color-success)' }}>¡Correcto!</h2>
             {bonus && (<IonText color="success"><h3>¡Bonus de Racha! +50 XP</h3></IonText>)}
-            {explicacion && (
-              <IonCard color="light" className="ion-margin-top">
-                <IonCardHeader><IonCardTitle>Explicación</IonCardTitle></IonCardHeader>
-                <IonCardContent className="ion-text-left">{explicacion}</IonCardContent>
-              </IonCard>
-            )}
+            {explicacion && (<IonCard color="light" className="ion-margin-top"><IonCardHeader><IonCardTitle>Explicación</IonCardTitle></IonCardHeader><IonCardContent className="ion-text-left">{explicacion}</IonCardContent></IonCard>)}
             <IonButton expand="block" onClick={handleSiguiente} className="ion-margin-top">Siguiente</IonButton>
           </div>
         )}
-
-        {/* --- ESTADO FINALIZADO (DESCOMENTADO) --- */}
         {estadoJuego === 'finalizado' && (
           <div className="ion-text-center ion-margin-top">
             <h2>¡Práctica Completada! 🏆</h2>
@@ -203,8 +220,6 @@ const QuizPage: React.FC = () => {
             <IonButton expand="block" onClick={volverAlMenuEjes}>Volver a Ejes</IonButton>
           </div>
         )}
-
-        {/* --- ESTADO JUEGO TERMINADO (DESCOMENTADO) --- */}
         {estadoJuego === 'juego_terminado' && (
           <div className="ion-text-center ion-margin-top">
             <h1 style={{ fontSize: '3rem' }}>💔</h1>
@@ -215,12 +230,9 @@ const QuizPage: React.FC = () => {
             <IonButton expand="block" onClick={volverAlMenuEjes} className="ion-margin-top">Volver a Ejes</IonButton>
           </div>
         )}
-
       </IonContent>
     </IonPage>
   );
 };
-
-// Quitamos las re-exportaciones de funciones si están definidas dentro como arriba
 
 export default QuizPage;

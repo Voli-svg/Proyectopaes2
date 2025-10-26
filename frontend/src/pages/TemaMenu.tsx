@@ -15,7 +15,7 @@ import {
   IonCardContent,
   IonBackButton,
   IonButtons,
-  IonAlert // <-- 1. Importa IonAlert
+  IonAlert
 } from '@ionic/react';
 import { useParams, useHistory } from 'react-router-dom';
 
@@ -27,22 +27,28 @@ const TemaMenu: React.FC = () => {
   const { materia } = useParams<TemaMenuParams>();
   const history = useHistory();
 
+  // Define la URL base de la API
+  const apiUrl = import.meta.env.VITE_API_URL;
+
   const [temas, setTemas] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // --- 2. Nuevos Estados ---
   const [mostrarAlertaDuracion, setMostrarAlertaDuracion] = useState(false);
   const [temaSeleccionadoTemp, setTemaSeleccionadoTemp] = useState<string | null>(null);
-  // --- Fin Nuevos Estados ---
 
   useEffect(() => {
     const fetchTemas = async () => {
-      // ... (lógica fetchTemas sin cambios) ...
+      if (!apiUrl) { // Verifica apiUrl
+        setError("La URL de la API no está configurada.");
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`http://127.0.0.1:5000/api/temas/${materia}`);
+        // --- CAMBIO AQUÍ ---
+        const response = await fetch(`${apiUrl}/api/temas/${materia}`);
+        // --- FIN CAMBIO ---
         if (!response.ok) {
           throw new Error(`No se pudieron cargar los temas para ${materia}. Status: ${response.status}`);
         }
@@ -56,25 +62,19 @@ const TemaMenu: React.FC = () => {
       }
     };
     fetchTemas();
-  }, [materia]);
+  }, [materia, apiUrl]); // Añadido apiUrl a dependencias
 
-  // --- 3. handleTemaClick ahora abre la alerta ---
   const handleTemaClick = (tema: string) => {
-    setTemaSeleccionadoTemp(tema); // Guarda el tema temporalmente
-    setMostrarAlertaDuracion(true); // Muestra la alerta
+    setTemaSeleccionadoTemp(tema);
+    setMostrarAlertaDuracion(true);
   };
-  // --- Fin handleTemaClick ---
 
-  // --- 4. Nueva función para iniciar el quiz ---
   const iniciarQuiz = (duracion: number) => {
-    if (!temaSeleccionadoTemp) return; // Seguridad
+    if (!temaSeleccionadoTemp) return;
     console.log(`Iniciando quiz para tema: ${temaSeleccionadoTemp}, Duración: ${duracion}`);
-    // Navegamos a /quiz/, pasando tema y duración como parámetros de URL
-    // Ej: /quiz/Algebra%20y%20Funciones/15
     history.replace(`/quiz/${encodeURIComponent(temaSeleccionadoTemp)}/${duracion}`);
-    setTemaSeleccionadoTemp(null); // Limpia el tema temporal
+    setTemaSeleccionadoTemp(null);
   };
-  // --- Fin iniciarQuiz ---
 
   const formatMateriaName = (name: string) => {
     return name.replace(/_/g, ' ');
@@ -93,7 +93,7 @@ const TemaMenu: React.FC = () => {
       <IonContent fullscreen className="ion-padding">
         <IonLoading isOpen={isLoading} message={'Cargando ejes temáticos...'} />
 
-        {error && ( /* ... (manejo de error sin cambios) ... */
+        {error && (
           <IonCard color="danger"><IonCardContent>{error}</IonCardContent></IonCard>
         )}
 
@@ -108,12 +108,12 @@ const TemaMenu: React.FC = () => {
                   <IonItem
                     key={tema}
                     button
-                    onClick={() => handleTemaClick(tema)} // Llama a la función que abre la alerta
+                    onClick={() => handleTemaClick(tema)}
                   >
                     <IonLabel>{tema}</IonLabel>
                   </IonItem>
                 ))}
-                {temas.length === 0 && ( /* ... (mensaje sin temas sin cambios) ... */
+                {temas.length === 0 && (
                    <IonItem><IonLabel color="medium">No se encontraron ejes.</IonLabel></IonItem>
                 )}
               </IonList>
@@ -121,23 +121,21 @@ const TemaMenu: React.FC = () => {
           </IonCard>
         )}
 
-        {/* --- ¡NUEVA ALERTA DE DURACIÓN! --- */}
         <IonAlert
           isOpen={mostrarAlertaDuracion}
-          onDidDismiss={() => setMostrarAlertaDuracion(false)} // Cierra la alerta si se cancela
+          onDidDismiss={() => setMostrarAlertaDuracion(false)}
           header={'Selecciona Duración'}
           message={'¿Cuántas preguntas quieres responder?'}
-          inputs={[ // Opciones tipo radio
+          inputs={[
             { name: 'duracion', type: 'radio', label: '15 Preguntas', value: 15, checked: true },
             { name: 'duracion', type: 'radio', label: '30 Preguntas', value: 30 },
             { name: 'duracion', type: 'radio', label: '60 Preguntas', value: 60 },
           ]}
           buttons={[
-            { text: 'Cancelar', role: 'cancel', handler: () => setTemaSeleccionadoTemp(null) }, // Limpia tema si cancela
-            { text: 'Empezar', handler: (data) => iniciarQuiz(data) } // Llama a iniciarQuiz con el valor seleccionado
+            { text: 'Cancelar', role: 'cancel', handler: () => setTemaSeleccionadoTemp(null) },
+            { text: 'Empezar', handler: (data) => iniciarQuiz(data) }
           ]}
         />
-        {/* --- FIN ALERTA --- */}
 
       </IonContent>
     </IonPage>

@@ -9,10 +9,9 @@ import {
   IonCardHeader,
   IonCardTitle,
   IonCardContent,
-  // ¡YA NO USAMOS IonList, IonItem, IonLabel, ni IonRouterLink!
-  IonInput, // Solo necesitamos IonInput
+  IonInput, // Usamos IonInput directamente
   IonButton,
-  IonAlert
+  IonAlert,
 } from '@ionic/react';
 import { useHistory } from 'react-router';
 
@@ -23,13 +22,20 @@ const Registro: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const history = useHistory();
 
-  /**
-   * (E) Función handleRegister (Sin cambios)
-   */
+  // Define la URL base de la API usando la variable de entorno
+  const apiUrl = import.meta.env.VITE_API_URL;
+
   const handleRegister = async () => {
     setError(null);
+    if (!apiUrl) { // Verificación extra por si la variable no está definida
+      setError("La URL de la API no está configurada.");
+      return;
+    }
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/register', {
+      // --- CAMBIO AQUÍ ---
+      // Usamos la variable apiUrl en lugar de la URL fija
+      const response = await fetch(`${apiUrl}/api/register`, {
+      // --- FIN CAMBIO ---
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -38,11 +44,13 @@ const Registro: React.FC = () => {
       });
 
       const data = await response.json();
+
       if (!response.ok) {
         throw new Error(data.error || 'Error al registrar');
       }
+
       setShowSuccess(true);
-      
+
     } catch (err: any) {
       setError(err.message);
     }
@@ -61,10 +69,7 @@ const Registro: React.FC = () => {
             <IonCardTitle>Crear Cuenta</IonCardTitle>
           </IonCardHeader>
           <IonCardContent>
-            
-            {/* --- ¡AQUÍ ESTÁ LA CORRECCIÓN! --- */}
-            {/* Borramos la IonList y usamos IonInput con 'label' */}
-
+            {/* Inputs actualizados sin IonList */}
             <IonInput
               label="Usuario"
               labelPlacement="floating"
@@ -73,7 +78,6 @@ const Registro: React.FC = () => {
               value={username}
               onIonChange={(e) => setUsername(e.detail.value!)}
             />
-            
             <IonInput
               label="Contraseña"
               labelPlacement="floating"
@@ -82,9 +86,8 @@ const Registro: React.FC = () => {
               value={password}
               onIonChange={(e) => setPassword(e.detail.value!)}
             />
+            {/* Fin Inputs */}
 
-            {/* --- FIN DE LA CORRECCIÓN --- */}
-            
             <IonButton expand="block" onClick={handleRegister} className="ion-margin-top">
               Registrarme
             </IonButton>
@@ -94,7 +97,7 @@ const Registro: React.FC = () => {
           </IonCardContent>
         </IonCard>
 
-        {/* Alertas (Sin cambios) */}
+        {/* Alertas (sin cambios) */}
         <IonAlert
           isOpen={!!error}
           onDidDismiss={() => setError(null)}

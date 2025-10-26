@@ -1,19 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
-  IonContent,
-  IonHeader,
-  IonPage,
-  IonTitle,
-  IonToolbar,
-  IonButton,
-  IonCard,
-  IonCardHeader,
-  IonCardTitle,
-  IonCardContent,
-  IonText,
-  IonProgressBar,
-  IonLabel,
-  IonLoading
+  IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton,
+  IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonText,
+  IonProgressBar, IonLabel, IonLoading
 } from '@ionic/react';
 import { useHistory } from 'react-router-dom';
 import './Tab3.css';
@@ -26,41 +15,53 @@ const XP_POR_NIVEL = 100;
 
 const Tab3: React.FC = () => {
   const history = useHistory();
+
+  // Define la URL base de la API
+  const apiUrl = import.meta.env.VITE_API_URL;
+
   const [perfil, setPerfil] = useState<PerfilUsuario | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetchPerfil();
-  }, []);
-
-  const fetchPerfil = async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      if (!token) {
+    const fetchPerfil = async () => {
+      if (!apiUrl) { // Verifica apiUrl
+        console.error("API URL no está configurada.");
         history.replace('/login');
         return;
       }
+      try {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          history.replace('/login');
+          return;
+        }
 
-      const response = await fetch('http://127.0.0.1:5000/api/user/profile', {
-headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}` // ¡Con backticks!
-      },
-      });
+        // --- CAMBIO AQUÍ ---
+        const response = await fetch(`${apiUrl}/api/user/profile`, {
+        // --- FIN CAMBIO ---
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
-      if (!response.ok) {
-        throw new Error('No se pudo cargar el perfil');
+        if (!response.ok) {
+          // Si el token es inválido o expiró, el backend dará error
+          localStorage.removeItem('access_token'); // Limpia token inválido
+          throw new Error('No se pudo cargar el perfil o sesión expirada');
+        }
+
+        const data: PerfilUsuario = await response.json();
+        setPerfil(data);
+
+      } catch (error) {
+        console.error("Error al cargar perfil:", error);
+        history.replace('/login');
+      } finally {
+        setIsLoading(false);
       }
-      const data: PerfilUsuario = await response.json();
-      setPerfil(data);
-
-    } catch (error) {
-      console.error("Error al cargar perfil:", error);
-      history.replace('/login');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+    fetchPerfil();
+  }, [history, apiUrl]); // Añadido apiUrl a dependencias
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
@@ -113,6 +114,7 @@ headers: {
             </IonCard>
           </>
         )}
+
       </IonContent>
     </IonPage>
   );
