@@ -1,3 +1,4 @@
+import os  # <-- Importa 'os'
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import sqlite3
@@ -16,12 +17,18 @@ CORS(app,
 )
 
 bcrypt = Bcrypt(app)
-app.config["JWT_SECRET_KEY"] = "mi-clave-secreta-muy-segura-123"
+
+# --- CONFIGURACIÓN JWT ACTUALIZADA ---
+# Lee la clave secreta de las variables de entorno (para Render)
+# o usa una clave por defecto (para desarrollo local)
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "tu-clave-secreta-local-cambiala")
 app.config["JWT_CSRF_PROTECTION"] = False
 app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+# --- FIN CONFIGURACIÓN JWT ACTUALIZADA ---
+
 jwt = JWTManager(app)
 
-# --- (Callbacks de error JWT) ---
+# --- (Callbacks de error JWT - sin cambios) ---
 @jwt.invalid_token_loader
 def invalid_token_callback(error_string):
     print(f"Internal JWT Error: {error_string}")
@@ -36,39 +43,27 @@ def connect_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-# --- DICCIONARIO MATERIA_EJES (¡EL TUYO!) ---
-# Las claves son para la URL, los valores son los nombres que quieres mostrar en el menú.
+# --- DICCIONARIO MATERIA_EJES ---
 MATERIA_EJES = {
     "Matematicas_M1": ["Números", "Álgebra y Funciones", "Geometría", "Probabilidad y Estadística"],
     "Lenguaje": ["Vocabulario Contextual", "Habilidad: Rastrear-Localizar", "Habilidad: Relacionar-Interpretar","Habilidad: Evaluar-Reflexionar"],
-    "Ciencias_Comun": ["Módulo Común","Mención Biología", "Mención Química", "Mención Física"],
+    "Ciencias_Comun": ["Biología (MC)", "Física (MC)", "Química (MC)"],
     "Matematicas_M2": ["Números Complejos M2", "Algebra y Funciones M2", "Geometría M2", "Probabilidad y Estadística M2"],
     "Historia": ["Historia en Perspectiva", "Democracia y Ciudadanía", "Economía y Sociedad"]
 }
 
-# --- ¡RUTA get_temas_por_materia SIMPLIFICADA! ---
+# --- RUTA get_temas_por_materia SIMPLIFICADA ---
 @app.route("/api/temas/<string:materia_principal>", methods=['GET'])
 def get_temas_por_materia(materia_principal):
-    """
-    Devuelve la LISTA DE EJES principales para una materia,
-    directamente desde el diccionario MATERIA_EJES.
-    """
-    # 1. Busca la lista de ejes asociada a la materia principal
     ejes_tematicos = MATERIA_EJES.get(materia_principal)
-
-    # 2. Si no encuentra la materia, devuelve error 404
     if not ejes_tematicos:
         return jsonify({"error": f"Materia principal '{materia_principal}' no encontrada"}), 404
-
-    # 3. Si la encuentra, devuelve la lista de ejes directamente
     return jsonify({
         "materia": materia_principal,
-        "temas": ejes_tematicos # Devuelve la lista tal cual del diccionario
+        "temas": ejes_tematicos
     }), 200
 
-
-# --- (Tus rutas existentes: /register, /login, /preguntas/, /profile, /update_xp siguen igual) ---
-# ... (asegúrate que estén aquí) ...
+# --- (Ruta de Registro) ---
 @app.route("/api/register", methods=['POST'])
 def register_user():
     data = request.get_json(); username = data.get('username'); password = data.get('password')
@@ -82,6 +77,7 @@ def register_user():
     except sqlite3.IntegrityError: conn.close(); return jsonify({"error": "Usuario ya existe"}), 409
     except Exception as e: conn.close(); print(f"Error registro: {e}"); return jsonify({"error": "Error interno"}), 500
 
+# --- (Ruta de Login) ---
 @app.route("/api/login", methods=['POST'])
 def login_user():
     data = request.get_json(); username = data.get('username'); password = data.get('password')
@@ -96,24 +92,21 @@ def login_user():
         else: return jsonify({"error": "Credenciales incorrectas"}), 401
     except Exception as e: print(f"Error login: {e}"); return jsonify({"error": "Error interno"}), 500
 
+# --- (Ruta de Preguntas) ---
 @app.route("/api/preguntas/<string:tema>", methods=['GET'])
+# @jwt_required() # Podrías descomentar esto si quieres que solo usuarios logueados vean preguntas
 def get_preguntas_por_tema(tema):
     preguntas_lista = []
+    conn = None # Definir conn fuera del try para usarlo en except
     try:
         conn = connect_db(); cursor = conn.cursor()
-        # Busca preguntas que COMIENCEN con el eje temático seleccionado
-        # Ej: Si el tema es "Números", busca "Números - %"
-        cursor.execute("SELECT * FROM preguntas WHERE tema LIKE ?", (f"{tema}%",))
+        # Busca preguntas que COMIENCEN con el eje temático (si es un eje) o coincidan EXACTO
+        # Ajusta esta lógica si necesitas más precisión
+        cursor.execute("SELECT * FROM preguntas WHERE tema LIKE ? OR tema = ?", (f"{tema}%", tema))
         rows = cursor.fetchall(); conn.close()
+
         if not rows:
-             # Si no encuentra temas específicos (ej. "Números - Porcentajes"),
-             # busca preguntas cuyo tema sea EXACTAMENTE el eje (ej. "Números")
-             print(f"No se encontraron temas específicos iniciando con '{tema}'. Buscando tema exacto...")
-             conn = connect_db(); cursor = conn.cursor()
-             cursor.execute("SELECT * FROM preguntas WHERE tema = ?", (tema,))
-             rows = cursor.fetchall(); conn.close()
-             if not rows:
-                 return jsonify({"error": f"No hay preguntas para el tema o eje '{tema}'"}), 404
+             return jsonify({"error": f"No hay preguntas para el tema o eje '{tema}'"}), 404
 
         for row in rows:
             preguntas_lista.append({
@@ -121,18 +114,18 @@ def get_preguntas_por_tema(tema):
                 "opciones": row["opciones"].split('|'),
                 "respuesta_correcta": row["respuesta_correcta"], "explicacion": row["explicacion"]
             })
-        # Devuelve las preguntas encontradas (podrían ser de varios subtemas si se usó LIKE)
         return jsonify({"tema": tema, "preguntas": preguntas_lista})
     except Exception as e:
         print(f"Error al buscar preguntas para '{tema}': {e}")
         if conn: conn.close()
         return jsonify({"error": "Error al cargar preguntas"}), 500
 
-
+# --- (Ruta de Perfil) ---
 @app.route("/api/user/profile", methods=['GET'])
 @jwt_required()
 def get_user_profile():
     user_id_string = get_jwt_identity()
+    conn = None
     try:
         user_id = int(user_id_string)
         conn = connect_db(); cursor = conn.cursor()
@@ -140,22 +133,34 @@ def get_user_profile():
         user = cursor.fetchone(); conn.close()
         if not user: return jsonify({"error": "Usuario no encontrado"}), 404
         return jsonify({"username": user["username"], "total_xp": user["total_xp"]}), 200
-    except Exception as e: print(f"Error perfil: {e}"); return jsonify({"error": "Error interno"}), 500
+    except Exception as e:
+        print(f"Error perfil: {e}")
+        if conn: conn.close()
+        return jsonify({"error": "Error interno"}), 500
 
+# --- (Ruta de Guardar XP) ---
 @app.route("/api/user/update_xp", methods=['POST'])
 @jwt_required()
 def update_user_xp():
     user_id_string = get_jwt_identity()
+    conn = None
     try:
         user_id = int(user_id_string)
         data = request.get_json(); xp_ganado = data.get('xp_ganado')
-        if xp_ganado is None: return jsonify({"error": "Falta 'xp_ganado'"}), 400
+        if xp_ganado is None or not isinstance(xp_ganado, int):
+             return jsonify({"error": "'xp_ganado' debe ser un número entero"}), 400
         conn = connect_db(); cursor = conn.cursor()
         cursor.execute("UPDATE users SET total_xp = total_xp + ? WHERE id = ?", (xp_ganado, user_id))
         conn.commit(); conn.close()
         return jsonify({"mensaje": "XP actualizado"}), 200
-    except Exception as e: print(f"Error update XP: {e}"); return jsonify({"error": "Error interno"}), 500
+    except Exception as e:
+        print(f"Error update XP: {e}")
+        if conn: conn.close()
+        return jsonify({"error": "Error interno"}), 500
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Lee el puerto de la variable de entorno PORT (para Render), o usa 5000 por defecto
+    port = int(os.environ.get("PORT", 5000))
+    # Importante para Render: escucha en 0.0.0.0
+    app.run(debug=False, host='0.0.0.0', port=port) # Cambia debug a False para producción
